@@ -445,6 +445,16 @@ body{
     <div class="field"><label>Notas (a qué ventana se refiere)</label><textarea id="fv-notas" placeholder="Ej: Dormitorio principal, planta alta"></textarea></div>
 
     <div class="field">
+      <label>Medidas (Ancho × Alto)</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="fv-ancho" type="number" inputmode="decimal" placeholder="Ancho" style="flex:1;">
+        <span style="color:var(--muted);font-weight:700;">×</span>
+        <input id="fv-alto" type="number" inputmode="decimal" placeholder="Alto" style="flex:1;">
+      </div>
+      <div class="chip-grid" id="fv-unidad" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="field">
       <label>Tipo</label>
       <div class="chip-grid" id="fv-tipo"></div>
     </div>
@@ -519,13 +529,14 @@ const PENDIENTES_KEY = 'aluwal_relevamiento_pendientes';
 const TIPOS = ['Corrediza','Paño fijo','Oscilobatiente','Brazo de empuje','Hoja de abrir','Puerta de abrir','Patagónica','Banderola'];
 const COLORES = ['Blanco','Negro','Anodizado','Símil madera'];
 const VIDRIOS = ['4mm','3+3','DVH 4/9/4','DVH 3+3/6/4','Otro'];
+const UNIDADES = ['cm','mm'];
 
 let state = { obras: [], ventanas: [] };
 let pendientes = [];
 try{ pendientes = JSON.parse(localStorage.getItem(PENDIENTES_KEY) || '[]'); }catch(e){ console.warn('No se pudo leer pendientes', e); }
 let currentObraId = null;
 let editingVentanaId = null;
-let selTipo = null, selColor = null, selVidrio = null;
+let selTipo = null, selColor = null, selVidrio = null, selUnidad = 'cm';
 let selMosquitero = null, selReja = null, selBipunto = null, selPremarco = null, selContramarco = null;
 
 function loadCache(){
@@ -692,6 +703,7 @@ function renderDetalle(){
     return;
   }
   list.innerHTML = ventanas.map(v=>{
+    const medida = (v.ancho && v.alto) ? `<span class="tag on">${esc(v.ancho)} × ${esc(v.alto)} ${esc(v.unidad||'cm')}</span>` : '';
     const tags = [v.tipo, v.color, v.vidrio===('Otro') ? (v.vidrioOtro||'Otro') : v.vidrio].filter(Boolean)
       .map(t=>`<span class="tag">${esc(t)}</span>`).join('');
     const extras = [];
@@ -709,7 +721,7 @@ function renderDetalle(){
         <div class="icon-sm" onclick="duplicarVentana('${v.id}')" title="Duplicar">⧉</div>
         <div class="icon-sm danger" onclick="eliminarVentana('${v.id}')" title="Eliminar">🗑</div>
       </div>
-      <div class="vent-tags" onclick="openVentanaModal('${v.id}')">${tags}${extraTags}</div>
+      <div class="vent-tags" onclick="openVentanaModal('${v.id}')">${medida}${tags}${extraTags}</div>
       ${v.notas ? `<div class="vent-notas" onclick="openVentanaModal('${v.id}')">${esc(v.notas)}</div>` : ''}
       ${v.extra ? `<div class="vent-notas" onclick="openVentanaModal('${v.id}')">Extra: ${esc(v.extra)}</div>` : ''}
     </div>`;
@@ -789,6 +801,7 @@ function toggleRow(containerId, val, onSel){
   });
 }
 
+function renderUnidadChips(){ chipRow('fv-unidad', UNIDADES, selUnidad, v=>{ selUnidad=v; renderUnidadChips(); }); }
 function renderTipoChips(){ chipRow('fv-tipo', TIPOS, selTipo, v=>{ selTipo=v; renderTipoChips(); }); }
 function renderColorChips(){ chipRow('fv-color', COLORES, selColor, v=>{ selColor=v; renderColorChips(); }); }
 function renderVidrioChips(){
@@ -816,6 +829,9 @@ function openVentanaModal(ventanaId){
     document.getElementById('fv-notas').value = v.notas||'';
     document.getElementById('fv-extra').value = v.extra||'';
     document.getElementById('fv-vidrio-otro').value = v.vidrioOtro||'';
+    document.getElementById('fv-ancho').value = v.ancho||'';
+    document.getElementById('fv-alto').value = v.alto||'';
+    selUnidad = v.unidad || 'cm';
     selTipo = v.tipo||null;
     selColor = v.color||null;
     selVidrio = v.vidrio||null;
@@ -829,11 +845,14 @@ function openVentanaModal(ventanaId){
     document.getElementById('fv-notas').value = '';
     document.getElementById('fv-extra').value = '';
     document.getElementById('fv-vidrio-otro').value = '';
+    document.getElementById('fv-ancho').value = '';
+    document.getElementById('fv-alto').value = '';
+    selUnidad = 'cm';
     selTipo = null; selColor = null; selVidrio = null;
     selMosquitero = false; selReja = false; selBipunto = false;
     selPremarco = false; selContramarco = false;
   }
-  renderTipoChips(); renderColorChips(); renderVidrioChips(); renderToggles(); toggleVidrioOtro();
+  renderUnidadChips(); renderTipoChips(); renderColorChips(); renderVidrioChips(); renderToggles(); toggleVidrioOtro();
   openModal('modal-vent');
 }
 
@@ -846,6 +865,9 @@ async function guardarVentana(){
     obraId: currentObraId,
     label,
     notas: document.getElementById('fv-notas').value.trim(),
+    ancho: document.getElementById('fv-ancho').value.trim(),
+    alto: document.getElementById('fv-alto').value.trim(),
+    unidad: selUnidad,
     tipo: selTipo,
     color: selColor,
     vidrio: selVidrio,
@@ -914,6 +936,7 @@ function buildResumen(){
   txt += `\nVENTANAS (${ventanas.length})\n`;
   ventanas.forEach(v=>{
     txt += `\n— ${v.label}\n`;
+    if(v.ancho && v.alto) txt += `Medida: ${v.ancho} × ${v.alto} ${v.unidad||'cm'}\n`;
     if(v.tipo) txt += `Tipo: ${v.tipo}\n`;
     if(v.color) txt += `Color: ${v.color}\n`;
     const vidrio = v.vidrio==='Otro' ? (v.vidrioOtro||'Otro') : v.vidrio;
